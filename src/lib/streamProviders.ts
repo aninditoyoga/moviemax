@@ -7,123 +7,8 @@ type StreamProvider = {
   id: string;
   name: string;
   baseUrl: string;
-  buildMovieUrl: (ids: MediaIds) => string | null;
+  buildMovieUrl: (ids: Required<MediaIds>) => string | null;
 };
-
-const withImdbFallback = (
-  ids: MediaIds,
-  build: (id: string) => string,
-  preferImdb = false
-) => {
-  const id = preferImdb ? ids.imdbId || ids.tmdbId : ids.tmdbId || ids.imdbId;
-
-  return id ? build(id) : null;
-};
-
-export const movieStreamProviders: StreamProvider[] = [
-  {
-    id: "02moviedownloader",
-    name: "02MovieDownloader",
-    baseUrl: "https://02moviedownloader.com",
-    buildMovieUrl: ({ tmdbId }) => `https://02moviedownloader.com/movie/${tmdbId}`,
-  },
-  {
-    id: "anyembed",
-    name: "AnyEmbed",
-    baseUrl: "https://player.anyembed.com",
-    buildMovieUrl: ({ tmdbId }) => `https://player.anyembed.com/movie/${tmdbId}`,
-  },
-  {
-    id: "cinesu",
-    name: "CineSu",
-    baseUrl: "https://embed.su",
-    buildMovieUrl: ({ tmdbId }) => `https://embed.su/embed/movie/${tmdbId}`,
-  },
-  {
-    id: "fmovies4u",
-    name: "FMovies4U",
-    baseUrl: "https://fmovies4u.com",
-    buildMovieUrl: ({ tmdbId }) => `https://fmovies4u.com/watch/movie/${tmdbId}`,
-  },
-  {
-    id: "fshare",
-    name: "FshareTV",
-    baseUrl: "https://fsharetv.co",
-    buildMovieUrl: ({ tmdbId }) => `https://fsharetv.co/movie/${tmdbId}`,
-  },
-  {
-    id: "icefy",
-    name: "Icefy",
-    baseUrl: "https://icefy.tv",
-    buildMovieUrl: ({ tmdbId }) => `https://icefy.tv/movie/${tmdbId}`,
-  },
-  {
-    id: "peachify",
-    name: "Peachify",
-    baseUrl: "https://peachify.net",
-    buildMovieUrl: ({ tmdbId }) => `https://peachify.net/embed/movie/${tmdbId}`,
-  },
-  {
-    id: "popr",
-    name: "Popr",
-    baseUrl: "https://popr.tv",
-    buildMovieUrl: ({ tmdbId }) => `https://popr.tv/movie/${tmdbId}`,
-  },
-  {
-    id: "streammafia",
-    name: "MafiaEmbed",
-    baseUrl: "https://streammafia.com",
-    buildMovieUrl: ({ tmdbId }) => `https://streammafia.com/embed/movie/${tmdbId}`,
-  },
-  {
-    id: "tulnex",
-    name: "Tulnex",
-    baseUrl: "https://tulnex.com",
-    buildMovieUrl: ({ tmdbId }) => `https://tulnex.com/embed/movie/${tmdbId}`,
-  },
-  {
-    id: "vidapi",
-    name: "VidApi",
-    baseUrl: "https://vidapi.ru",
-    buildMovieUrl: ({ tmdbId }) => `https://vidapi.ru/movie/${tmdbId}`,
-  },
-  {
-    id: "videasy",
-    name: "Videasy",
-    baseUrl: "https://player.videasy.net",
-    buildMovieUrl: ({ tmdbId }) => `https://player.videasy.net/movie/${tmdbId}`,
-  },
-  {
-    id: "vidnest",
-    name: "VidNest",
-    baseUrl: "https://vidnest.fun",
-    buildMovieUrl: ({ tmdbId }) => `https://vidnest.fun/movie/${tmdbId}`,
-  },
-  {
-    id: "vidrock",
-    name: "VidRock",
-    baseUrl: "https://vidrock.net",
-    buildMovieUrl: ({ tmdbId }) => `https://vidrock.net/movie/${tmdbId}`,
-  },
-  {
-    id: "vidsrc",
-    name: "VidSrc",
-    baseUrl: "https://vsembed.ru",
-    buildMovieUrl: ({ tmdbId }) => `https://vsembed.ru/embed/movie?tmdb=${tmdbId}`,
-  },
-  {
-    id: "vidzee",
-    name: "VidZee",
-    baseUrl: "https://vidzee.wtf",
-    buildMovieUrl: ({ tmdbId }) => `https://vidzee.wtf/movie/${tmdbId}`,
-  },
-  {
-    id: "vixsrc",
-    name: "VixSrc",
-    baseUrl: "https://vixsrc.to",
-    buildMovieUrl: (ids) => withImdbFallback(ids, (id) => `https://vixsrc.to/movie/${id}`),
-  },
-];
 
 export type ResolvedStreamSource = {
   provider: string;
@@ -132,6 +17,46 @@ export type ResolvedStreamSource = {
 };
 
 const PROVIDER_TIMEOUT_MS = 4500;
+
+const streamImdbProvider: StreamProvider = {
+  id: "streamimdb",
+  name: "StreamIMDb",
+  baseUrl: "https://streamimdb.ru",
+  buildMovieUrl: ({ imdbId }) =>
+    imdbId ? `https://streamimdb.ru/embed/movie/${imdbId}` : null,
+};
+
+async function getMovieImdbId(tmdbId: string) {
+  const apiKey = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
+
+  if (!apiKey) {
+    console.warn("[SourceService] TMDB API key is missing, cannot convert TMDB ID to IMDb ID");
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.themoviedb.org/3/movie/${tmdbId}/external_ids?api_key=${apiKey}`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    if (!response.ok) {
+      console.warn(
+        `[SourceService] Failed to convert TMDB ID ${tmdbId} to IMDb ID: ${response.status}`
+      );
+      return null;
+    }
+
+    const data = (await response.json()) as { imdb_id?: string | null };
+
+    return data.imdb_id || null;
+  } catch {
+    console.warn(`[SourceService] Failed to convert TMDB ID ${tmdbId} to IMDb ID`);
+    return null;
+  }
+}
 
 async function isReachable(url: string) {
   const controller = new AbortController();
@@ -157,35 +82,33 @@ async function isReachable(url: string) {
 }
 
 export async function resolveMovieStreamSource(ids: MediaIds) {
-  const checks = movieStreamProviders
-    .map((provider) => ({
-      provider,
-      url: provider.buildMovieUrl(ids),
-    }))
-    .filter((item): item is { provider: StreamProvider; url: string } => Boolean(item.url))
-    .map(async ({ provider, url }) => {
-      const startedAt = Date.now();
-      const reachable = await isReachable(url);
-      const responseTime = Date.now() - startedAt;
+  const imdbId = ids.imdbId || (await getMovieImdbId(ids.tmdbId));
+  const providerIds: Required<MediaIds> = {
+    tmdbId: ids.tmdbId,
+    imdbId: imdbId || "",
+  };
+  const url = streamImdbProvider.buildMovieUrl(providerIds);
 
-      console.log(
-        `[SourceService] Provider '${provider.name}' returned ${reachable ? 1 : 0} source(s) in ${responseTime}ms`
-      );
+  console.log("[SourceService] Fetching from 1 provider(s)");
 
-      return reachable
-        ? {
-            provider: provider.name,
-            url,
-            responseTime,
-          }
-        : null;
-    });
+  if (!url) {
+    console.log(`[SourceService] Provider '${streamImdbProvider.name}' returned 0 source(s) in 0ms`);
+    return null;
+  }
 
-  console.log(`[SourceService] Fetching from ${checks.length} provider(s)`);
+  const startedAt = Date.now();
+  const reachable = await isReachable(url);
+  const responseTime = Date.now() - startedAt;
 
-  const results = await Promise.all(checks);
+  console.log(
+    `[SourceService] Provider '${streamImdbProvider.name}' returned ${reachable ? 1 : 0} source(s) in ${responseTime}ms`
+  );
 
-  return results
-    .filter((source): source is ResolvedStreamSource => Boolean(source))
-    .sort((a, b) => a.responseTime - b.responseTime)[0];
+  return reachable
+    ? {
+        provider: streamImdbProvider.name,
+        url,
+        responseTime,
+      }
+    : null;
 }
