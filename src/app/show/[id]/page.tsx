@@ -208,15 +208,45 @@ const ShowPage = () => {
               </div>
               <div className="w-full my-6 max-w-64 flex gap-4">
                 {type === "movie" && (
-                  <a
-                    href={`https://vidsrc.xyz/embed/movie/${showDetails.imdb_id}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="bg-red-600 hover:bg-red-700 text-white px-8 py-2.5 rounded-full flex items-center gap-3 transition duration-300 ease-in-out shadow-lg hover:shadow-red-500/20 group"
-                  >
-                    <Film size={20} className="group-hover:scale-110 transition-transform" />
-                    Watch Now
-                  </a>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {[
+                      {
+                        label: "Watch Now",
+                        url: `https://vidsrc.online/embed/movie/${showDetails.imdb_id}`,
+                        primary: true,
+                      },
+                      {
+                        label: "Server 2",
+                        url: `https://vidsrc.fyi/embed/movie/${showDetails.imdb_id}`,
+                      },
+                      {
+                        label: "Server 3",
+                        url: `https://vidsrc.cc/v2/embed/movie/${showDetails.imdb_id}`,
+                      },
+                      {
+                        label: "Server 4",
+                        url: `https://vidsrc.wiki/embed/movie/${showDetails.id}`,
+                      },
+                    ].map((server) => (
+                      <a
+                        key={server.label}
+                        href={server.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={
+                          server.primary
+                            ? "bg-red-600 hover:bg-red-700 text-white px-8 py-2.5 rounded-full flex items-center gap-3 transition duration-300 ease-in-out shadow-lg hover:shadow-red-500/20 group"
+                            : "bg-white/10 hover:bg-white/20 text-white px-5 py-2.5 rounded-full flex items-center gap-2 transition duration-300 ease-in-out border border-white/10"
+                        }
+                      >
+                        <Film
+                          size={server.primary ? 20 : 18}
+                          className={server.primary ? "group-hover:scale-110 transition-transform" : ""}
+                        />
+                        {server.label}
+                      </a>
+                    ))}
+                  </div>
                 )}
                 <button
                   onClick={() => toggleBookmark(mapShowDetailsToShow(showDetails))}
