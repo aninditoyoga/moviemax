@@ -3,11 +3,17 @@ type MediaIds = {
   imdbId?: string | null;
 };
 
+type TvEpisodeIds = MediaIds & {
+  season: string;
+  episode: string;
+};
+
 type StreamProvider = {
   id: string;
   name: string;
   baseUrl: string;
   buildMovieUrl: (ids: Required<MediaIds>) => string | null;
+  buildTvUrl: (ids: Required<TvEpisodeIds>) => string | null;
 };
 
 export type ResolvedStreamSource = {
@@ -24,9 +30,11 @@ const streamImdbProvider: StreamProvider = {
   baseUrl: "https://streamimdb.ru",
   buildMovieUrl: ({ imdbId }) =>
     imdbId ? `https://streamimdb.ru/embed/movie/${imdbId}` : null,
+  buildTvUrl: ({ imdbId, season, episode }) =>
+    imdbId ? `https://streamimdb.ru/embed/tv/${imdbId}/${season}/${episode}` : null,
 };
 
-async function getMovieImdbId(tmdbId: string) {
+async function getTmdbExternalImdbId(mediaType: "movie" | "tv", tmdbId: string) {
   const apiKey = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
   if (!apiKey) {
@@ -36,7 +44,7 @@ async function getMovieImdbId(tmdbId: string) {
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}/external_ids?api_key=${apiKey}`,
+      `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/external_ids?api_key=${apiKey}`,
       {
         cache: "no-store",
       }
@@ -44,7 +52,7 @@ async function getMovieImdbId(tmdbId: string) {
 
     if (!response.ok) {
       console.warn(
-        `[SourceService] Failed to convert TMDB ID ${tmdbId} to IMDb ID: ${response.status}`
+        `[SourceService] Failed to convert TMDB ${mediaType} ID ${tmdbId} to IMDb ID: ${response.status}`
       );
       return null;
     }
@@ -53,7 +61,7 @@ async function getMovieImdbId(tmdbId: string) {
 
     return data.imdb_id || null;
   } catch {
-    console.warn(`[SourceService] Failed to convert TMDB ID ${tmdbId} to IMDb ID`);
+    console.warn(`[SourceService] Failed to convert TMDB ${mediaType} ID ${tmdbId} to IMDb ID`);
     return null;
   }
 }
@@ -82,12 +90,46 @@ async function isReachable(url: string) {
 }
 
 export async function resolveMovieStreamSource(ids: MediaIds) {
-  const imdbId = ids.imdbId || (await getMovieImdbId(ids.tmdbId));
+  const imdbId = ids.imdbId || (await getTmdbExternalImdbId("movie", ids.tmdbId));
   const providerIds: Required<MediaIds> = {
     tmdbId: ids.tmdbId,
     imdbId: imdbId || "",
   };
   const url = streamImdbProvider.buildMovieUrl(providerIds);
+
+  console.log("[SourceService] Fetching from 1 provider(s)");
+
+  if (!url) {
+    console.log(`[SourceService] Provider '${streamImdbProvider.name}' returned 0 source(s) in 0ms`);
+    return null;
+  }
+
+  const startedAt = Date.now();
+  const reachable = await isReachable(url);
+  const responseTime = Date.now() - startedAt;
+
+  console.log(
+    `[SourceService] Provider '${streamImdbProvider.name}' returned ${reachable ? 1 : 0} source(s) in ${responseTime}ms`
+  );
+
+  return reachable
+    ? {
+        provider: streamImdbProvider.name,
+        url,
+        responseTime,
+      }
+    : null;
+}
+
+export async function resolveTvStreamSource(ids: TvEpisodeIds) {
+  const imdbId = ids.imdbId || (await getTmdbExternalImdbId("tv", ids.tmdbId));
+  const providerIds: Required<TvEpisodeIds> = {
+    tmdbId: ids.tmdbId,
+    imdbId: imdbId || "",
+    season: ids.season,
+    episode: ids.episode,
+  };
+  const url = streamImdbProvider.buildTvUrl(providerIds);
 
   console.log("[SourceService] Fetching from 1 provider(s)");
 

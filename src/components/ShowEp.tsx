@@ -47,7 +47,7 @@ export default function ShowEp({showDetails }: {showDetails: ShowDetails}) {
                 className="bg-gray-800 hover:bg-gray-500 py-2 px-4 rounded-full m-2 transition duration-300 ease-in-out"
                 onClick={() =>
                   window.open(
-                    `https://vidsrc.xyz/embed/tv?tmdb=${showDetails.id}&season=${season?.season_number}&episode=${episodeIndex + 1}`,
+                    `/api/watch/tv/${showDetails.id}?imdbId=${showDetails.imdb_id}&season=${season?.season_number}&episode=${episodeIndex + 1}`,
                     "_blank"
                   )
                 }
